@@ -6,64 +6,111 @@ interface NewsState {
   newsByDate: Record<string, News[]>;
   loading: boolean;
   error: string | null;
-  lastFetchedYear: number;
-  lastFetchedMonth: number;
+  upperDate: string | null;
+  lowerYear: number;
+  lowerMonth: number;
+  newAvailable: boolean;
 }
 
 const initialState: NewsState = {
   newsByDate: {},
   loading: false,
   error: null,
-  lastFetchedYear: new Date().getFullYear(),
-  lastFetchedMonth: new Date().getMonth() + 1,
+  upperDate: null,
+  lowerYear: 2019,
+  lowerMonth: 12,
+  newAvailable: false,
 };
 
 export const fetchNews = createAsyncThunk(
   'news/fetchNews',
-  async ({ year, month }: { year: number; month: number }) => {
+  async (
+    { year, month, checkNewOnly = false }: { year: number; month: number; checkNewOnly?: boolean },
+    { getState }
+  ) => {
     const keyAPI = import.meta.env.VITE_API_KEY;
-    const baseURL = import.meta.env.VITE_BASE_URL;
-
     const res = await fetch(`api/${year}/${month}.json?api-key=${keyAPI}`);
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`HTTP Error ${res.status}:`, text);
-      throw new Error(`HTTP Error ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    const data = await res.json();
+    const articles = data.response.docs as News[];
+
+    if (checkNewOnly) {
+      const state = getState() as { news: NewsState };
+      const currentUpperDate = state.news.upperDate;
+      const newArticles = articles.filter((n) => {
+        const pub = n.pub_date.slice(0, 10);
+        return !currentUpperDate || pub > currentUpperDate;
+      });
+      return { articles: newArticles, year, month, checkNewOnly: true };
     }
 
-    const data = await res.json();
-    console.log(data);
-    console.log(`Fetched news for ${year}/${month}:`, data);
-
-    return data.response.docs as News[];
+    return { articles, year, month };
   }
 );
 
 const newsSlice = createSlice({
   name: 'news',
-  initialState: initialState,
-  reducers: {},
+  initialState,
+  reducers: {
+    resetNewAvailable(state) {
+      state.newAvailable = false;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchNews.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchNews.fulfilled, (state, action: PayloadAction<News[]>) => {
-        state.loading = false;
-        action.payload.forEach((news) => {
-          const dateKey = news.pub_date.slice(0, 10);
-          if (!state.newsByDate[dateKey]) state.newsByDate[dateKey] = [];
-          if (!state.newsByDate[dateKey].some((n) => n.web_url === news.web_url)) {
-            state.newsByDate[dateKey].push(news);
+      .addCase(
+        fetchNews.fulfilled,
+        (
+          state,
+          action: PayloadAction<{
+            articles: News[];
+            year: number;
+            month: number;
+            checkNewOnly?: boolean;
+          }>
+        ) => {
+          state.loading = false;
+          const { articles, year, month, checkNewOnly } = action.payload;
+
+          if (checkNewOnly) {
+            if (articles.length > 0) {
+              state.newAvailable = true;
+            }
+            return;
           }
-        });
-      })
+
+          articles.forEach((news) => {
+            const dateKey = news.pub_date.slice(0, 10);
+            if (!state.newsByDate[dateKey]) state.newsByDate[dateKey] = [];
+            if (!state.newsByDate[dateKey].some((n) => n.web_url === news.web_url)) {
+              state.newsByDate[dateKey].push(news);
+            }
+
+            if (!state.upperDate || news.pub_date.slice(0, 10) > state.upperDate) {
+              state.upperDate = news.pub_date.slice(0, 10);
+            }
+          });
+
+          if (year === state.lowerYear && month === state.lowerMonth) {
+            if (month === 1) {
+              state.lowerMonth = 12;
+              state.lowerYear -= 1;
+            } else {
+              state.lowerMonth -= 1;
+            }
+          }
+        }
+      )
       .addCase(fetchNews.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message || 'Error Loading News';
+        state.error = action.error.message || 'Ошибка загрузки новостей';
       });
   },
 });
 
+export const { resetNewAvailable } = newsSlice.actions;
 export default newsSlice.reducer;

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { News } from '../../types/News';
-import fallbackImg from "/icons/test.png"
+import fallbackImg from '/icons/test.png';
 
 interface NewsItemProps {
   news: News;
@@ -25,7 +25,7 @@ const NewsItem: React.FC<NewsItemProps> = ({ news }) => {
           src={imageUrl}
           alt="news"
         />
-        <div className="flex flex-col gap-2 items-start max-w-52">
+        <div className="flex flex-col gap-2 items-start w-52">
           <h2 className="font-black text-sm text-[#096FFA]">{news.source || 'Unknown Source'}</h2>
           <p key={news.web_url} className="text-base font-normal leading-6">
             <a href={news.web_url} target="_blank" rel="noopener noreferrer">
