@@ -28,7 +28,7 @@ export const fetchNews = createAsyncThunk(
     { year, month, checkNewOnly = false }: { year: number; month: number; checkNewOnly?: boolean },
     { getState }
   ) => {
-    const keyAPI = import.meta.env.VITE_API_KEY;
+    const keyAPI = ' rJ7XaUF0IQZG7UYu0jp85Mdqpeu5MnbP';
     const res = await fetch(`api/${year}/${month}.json?api-key=${keyAPI}`);
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const data = await res.json();
